@@ -220,6 +220,8 @@ Probes are one-call scripts that bypass the game engine to measure a single beha
 
 The probes hand-build the agent context (system prompt + optionally an answer-phase reply) and make **one** structured LLM call per grid cell. They are the workhorses of the current experiments.
 
+Multiple probes can be launched in parallel — each script isolates its token counter into a per-process `.part` file merged into the canonical `token_usage.txt` atomically on exit. See [Cost accounting](#cost-accounting) for the mechanism and how to recover parts from crashed runs.
+
 
 ### Grid probes: shared grid YAML format
 
@@ -385,6 +387,22 @@ The script reads `token_usage.txt` and multiplies each model's prompt/completion
 
 Update `configs/together_prices.yaml` manually when Together changes its pricing or when you expand the list of models used in a game.
 
+### Parallel-safe accounting
+
+Scripts that open a `token_usage_session()` (`probe_share.py`, `probe_request.py`, `probe_expected_rounds.py`) write to a per-process buffer at the repo root:
+
+    token_usage.<pid>.<timestamp>-<uid>.part
+
+so several scripts can run in parallel without racing on the shared counter. On clean exit the part is merged into `token_usage.txt` atomically under a file lock (`token_usage.txt.lock`) and then deleted.
+
+If a script crashes or is stopped with Ctrl+C its `.part` file is **preserved** for manual recovery. Merge orphan parts later with:
+
+```bash
+python scripts/merge_token_usage.py             # merge all orphan parts
+python scripts/merge_token_usage.py --dry-run   # list what would be merged
+python scripts/merge_token_usage.py --target other_target.txt
+```
+
 ---
 
 ## Tests
@@ -393,7 +411,7 @@ Update `configs/together_prices.yaml` manually when Together changes its pricing
 python -m pytest
 ```
 
-**55 automatic tests** currently, organised by module. What each file covers:
+**60 automatic tests** currently, organised by module. What each file covers:
 
 | File | Focus | Highlights |
 |---|---|---|
@@ -403,6 +421,7 @@ python -m pytest
 | `tests/test_llm_runner.py` | `call_with_retry` schema retries | first-attempt success, retry pops the invalid user turn and keeps the context clean, `FormatLimitExhausted` after exhausting retries, transport errors return `None` (no raise), `format_warning` / `format_limit` events logged, `max_retries=0` means one attempt, `extra_request_payload` merged |
 | `tests/test_logger.py` | JSONL event logger | `event` field present, envelope fields (`ts`, `round`, `agent_id`), `set_round` reflected, output is valid JSONL |
 | `tests/test_engine_integration.py` | End-to-end fake runs | full fake run terminates at `max_rounds`, `format_limit_exhausted` stops the game cleanly, matcher choice does not affect result in anonymous mode, anonymous share prompt does not leak target list |
+| `tests/test_token_usage.py` | Cross-process merge semantics | source-sum into empty/existing target, session merges on clean exit, `.part` preserved on exception, no loss under N concurrent sessions |
 
 Run a single group with, e.g. `python -m pytest tests/test_engine_integration.py -v`.
 
@@ -426,7 +445,8 @@ agent-knowgame/
 │       ├── base_client.py   # LLMClient abstract + token accounting
 │       ├── fake_llm.py      # scripted FakeLLMClient
 │       ├── ollama_llm.py    # OllamaLLMClient
-│       └── together_llm.py  # TogetherLLMClient (+ reasoning capture)
+│       ├── together_llm.py  # TogetherLLMClient (+ reasoning capture)
+│       └── token_usage.py   # per-process buffer + cross-process merge
 ├── scripts/
 │   ├── run_game.py                # main entry point for full games
 │   ├── probe_share.py             # p(share) grid probe
@@ -435,7 +455,8 @@ agent-knowgame/
 │   ├── probe_together.py          # Together API sanity check
 │   ├── probe_rounds.py            # legacy single-config rounds probe
 │   ├── dump_prompts.py            # render templates to markdown
-│   └── calc_costs.py              # spend estimator
+│   ├── calc_costs.py              # spend estimator
+│   └── merge_token_usage.py       # merge orphan .part files after crashes
 ├── configs/
 │   ├── config_template.yaml       # base full-game config
 │   ├── together_prices.yaml       # per-1K price table

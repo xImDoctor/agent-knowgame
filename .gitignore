@@ -3,7 +3,13 @@ logs/
 probes/
 !configs/probes/
 
-*token_usage*.txt
+# token_usage file and its temps
+/token_usage.txt
+/token_usage.txt.lock
+/token_usage.txt.new
+/token_usage.*.part
+/*token_usage*.txt
+
 prompts_*.md
 
 # Byte-compiled / optimized / DLL files

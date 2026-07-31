@@ -49,6 +49,7 @@ from pydantic import BaseModel
 
 from game.config import GameConfig
 from game.clients import LLMClient, OllamaLLMClient, TogetherLLMClient
+from game.clients.token_usage import token_usage_session
 from game.prompt_builder import create_prompt_builder
 from game.states import AgentState, ChatMessage
 
@@ -72,7 +73,8 @@ class RoundsExpectation(BaseModel):
     number: int
 
 
-def build_llm(config: GameConfig) -> LLMClient:
+def build_llm(config: GameConfig, token_log_path: Path | None = None) -> LLMClient:
+    log_path = token_log_path if token_log_path is not None else Path('token_usage.txt')
 
     if config.api_type == 'ollama':
         return OllamaLLMClient(
@@ -81,6 +83,7 @@ def build_llm(config: GameConfig) -> LLMClient:
             temperature=config.temperature,
             top_p=config.top_p,
             request_timeout=config.request_timeout,
+            token_log_path=log_path,
         )
 
     if config.api_type == 'together':
@@ -91,6 +94,7 @@ def build_llm(config: GameConfig) -> LLMClient:
             top_p=config.top_p,
             max_tokens=config.max_tokens,
             request_timeout=config.request_timeout,
+            token_log_path=log_path,
         )
 
     raise NotImplementedError(f"api_type={config.api_type!r} not supported by probe_expected_rounds")
@@ -148,7 +152,8 @@ def make_messages(config: GameConfig) -> list[ChatMessage]:
     ]
 
 
-def run_one(config: GameConfig, use_reasoning: bool) -> dict:
+def run_one(config: GameConfig, use_reasoning: bool,
+            token_log_path: Path | None = None) -> dict:
     """Single expectation probe call. Returns a flat record for JSONL"""
 
     messages = make_messages(config)
@@ -167,7 +172,7 @@ def run_one(config: GameConfig, use_reasoning: bool) -> dict:
     }
 
     try:
-        llm = build_llm(config)
+        llm = build_llm(config, token_log_path=token_log_path)
 
         if use_reasoning and isinstance(llm, TogetherLLMClient): # if turned on reasoning field for such model
             response, reasoning = llm.structured_call_with_reasoning(messages, RoundsExpectation)
@@ -306,13 +311,13 @@ def main():
     print(f'Configs to probe: {total_configs}; reasoning={use_reasoning}')
     print(f'Writing to: {jsonl_path}')
 
-    with jsonl_path.open('w', encoding='utf-8') as f:
+    with token_usage_session() as tok, jsonl_path.open('w', encoding='utf-8') as f:
         for ci, cfg_pack in enumerate(configs, 1):
             seeds = cfg_pack.pop('seeds')
 
             for seed in seeds:
                 config = stub_config(**cfg_pack, seed=seed)
-                record = run_one(config, use_reasoning)
+                record = run_one(config, use_reasoning, token_log_path=tok)
                 f.write(json.dumps(record, ensure_ascii=False) + '\n')
                 f.flush()
                 print(f'  [{ci}/{total_configs}] '
