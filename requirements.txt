@@ -4,6 +4,7 @@ python-dotenv>=1.0
 ollama
 openai
 
+filelock>=3.12
 pytest>= 8.0
 
 PyYAML>=6.0
