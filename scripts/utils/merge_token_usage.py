@@ -2,16 +2,16 @@
 for crashed runs into the right target.
 
 Usage:
-    python scripts/merge_token_usage.py
-    python scripts/merge_token_usage.py --target token_usage.txt
-    python scripts/merge_token_usage.py --dry-run
+    python scripts/utils/merge_token_usage.py
+    python scripts/utils/merge_token_usage.py --target token_usage.txt
+    python scripts/utils/merge_token_usage.py --dry-run
 """
 
 import sys
 import argparse
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 
 from game.clients.token_usage import merge_files, DEFAULT_VAL, PART_SUFFIX

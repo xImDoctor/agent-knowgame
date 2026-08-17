@@ -9,9 +9,9 @@ Two files are written per run - one per game mode:
   prompts_<version>_named.md      (display_names_file set; skipped if missing)
 
 Usage:
-    python scripts/dump_prompts.py
-    python scripts/dump_prompts.py --template-version v1_baseline
-    python scripts/dump_prompts.py --display-names-file configs/names_test_pool.txt
+    python scripts/utils/dump_prompts.py
+    python scripts/utils/dump_prompts.py --template-version v1_baseline
+    python scripts/utils/dump_prompts.py --display-names-file configs/names_test_pool.txt
 """
 
 import sys
@@ -19,7 +19,7 @@ import argparse
 import random
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from game.config import GameConfig
 from game.prompt_builder import create_prompt_builder
