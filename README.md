@@ -26,7 +26,6 @@ A configurable multi-agent game engine, plus one-call probe scripts that let you
    - [`probe_request.py` – will the uninformed agent request the word from the game?](#probe_requestpy--will-the-uninformed-agent-request-the-word-from-the-game)
    - [`probe_expected_rounds.py` – how long does the agent think the game will last?](#probe_expected_roundspy--how-long-does-the-agent-think-the-game-will-last)
    - [`probe_together.py` – Together API sanity check](#probe_togetherpy--together-api-sanity-check)
-   - [`probe_rounds.py` – legacy ver. of expected-rounds probe with single config](#probe_roundspy--legacy-single-config-expected-rounds-probe)
 6. [Utility scripts](#utility-scripts)
 7. [Cost accounting](#cost-accounting)
 8. [Tests](#tests)
@@ -79,7 +78,7 @@ Prompt templates live in `game/prompt_builder.py`. The active version is `v1_bas
 Dump the exact rendered prompts with:
 
 ```bash
-python scripts/dump_prompts.py --template-version v1_baseline
+python scripts/utils/dump_prompts.py --template-version v1_baseline
 ```
 
 This writes `prompts_v1_baseline_anonymous.md` and `prompts_v1_baseline_named.md`.
@@ -272,7 +271,7 @@ Fixes the game to `teacher_only` initiation + `teacher_pays` payment (fixes thes
 Run:
 
 ```bash
-python scripts/probe_share.py --grid-file configs/probes/probe_qwen3_235b_10seeds.yaml
+python scripts/probes/probe_share.py --grid-file configs/probes/probe_qwen3_235b_10seeds.yaml
 ```
 
 **Early stopping.** When enabled, the first half of `seeds` runs as batch 1. If every batch-1 result is identical, the config stops there and does not run batch 2. When disabled, all seeds always run.
@@ -296,7 +295,7 @@ Fixes the game to `initiation_mode='student_only'` + `payment_mode='student_pays
 Run:
 
 ```bash
-python scripts/probe_request.py --grid-file configs/probes/probe_qwen2_5_7b_turbo_100seeds.yaml
+python scripts/probes/probe_request.py --grid-file configs/probes/probe_qwen2_5_7b_turbo_100seeds.yaml
 ```
 
 **Output:**
@@ -324,7 +323,7 @@ Both regimes ask the same follow-up question, so any distributional shift is att
 Run:
 
 ```bash
-python scripts/probe_expected_rounds.py --grid-file configs/probes/probe_qwen3_235b_10seeds.yaml
+python scripts/probes/probe_expected_rounds.py --grid-file configs/probes/probe_qwen3_235b_10seeds.yaml
 ```
 
 `early_stopping` is **ignored** here: integer answers are almost never identical across seeds, so early stopping would never trigger.
@@ -340,25 +339,11 @@ python scripts/probe_expected_rounds.py --grid-file configs/probes/probe_qwen3_2
 Single-call smoke test against Together. Verifies that `TOGETHER_API_KEY` works, the model is serverless, and Together's grammar engine accepts our pydantic schema (some model backends reject certain schemas).
 
 ```bash
-python scripts/probe_together.py                            # default: meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo
-python scripts/probe_together.py openai/gpt-oss-20b         # any Together model id
+python scripts/probes/probe_together.py                            # default: meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo
+python scripts/probes/probe_together.py openai/gpt-oss-20b         # any Together model id
 ```
 
 > In other words, this is the check that the API is ready for a full game run or for launching any of the other scripts.
-
-### `probe_rounds.py` – legacy single-config expected-rounds probe
-
-Older predecessor of `probe_expected_rounds.py`. Takes a **single full game YAML** (not a grid) and asks one agent how many rounds it expects, optionally across a seed list from a file.
-
-```bash
-python scripts/probe_rounds.py configs/config_template.yaml
-python scripts/probe_rounds.py configs/config_template.yaml --seeds-file probes/seeds.txt
-python scripts/probe_rounds.py --api-type ollama --model qwen2.5:3b --seed 7
-```
-
-Not designed for `api_type=fake` (FakeLLM does not fabricate this schema). Kept around for historical comparison; new experiments should use `probe_expected_rounds.py`.
-
-**It is strongly recommended to use `probe_expected_rounds.py`**.
 
 ---
 
@@ -367,10 +352,10 @@ Not designed for `api_type=fake` (FakeLLM does not fabricate this schema). Kept 
 ```bash
 # dump prompt templates of a builder to markdown - one file per game mode
 # writes prompts_<version>_anonymous.md and prompts_<version>_named.md
-python scripts/dump_prompts.py --template-version v1_baseline
+python scripts/utils/dump_prompts.py --template-version v1_baseline
 
 # estimate API spend from token_usage.txt against the prices table
-python scripts/calc_costs.py
+python scripts/utils/calc_costs.py
 ```
 
 ---
@@ -380,7 +365,7 @@ python scripts/calc_costs.py
 Every LLM client writes per-model token counts into `token_usage.txt` at the repo root (append-and-update). Estimate spend at any time:
 
 ```bash
-python scripts/calc_costs.py
+python scripts/utils/calc_costs.py
 ```
 
 The script reads `token_usage.txt` and multiplies each model's prompt/completion counts by the per-1K prices in `configs/together_prices.yaml`. Models without a matching price entry (`fake:*`, `ollama:*`, or newly-introduced Together models) are skipped with a `[WARN] No prices for ...` line.
@@ -398,9 +383,9 @@ so several scripts can run in parallel without racing on the shared counter. On 
 If a script crashes or is stopped with Ctrl+C its `.part` file is **preserved** for manual recovery. Merge orphan parts later with:
 
 ```bash
-python scripts/merge_token_usage.py             # merge all orphan parts
-python scripts/merge_token_usage.py --dry-run   # list what would be merged
-python scripts/merge_token_usage.py --target other_target.txt
+python scripts/utils/merge_token_usage.py             # merge all orphan parts
+python scripts/utils/merge_token_usage.py --dry-run   # list what would be merged
+python scripts/utils/merge_token_usage.py --target other_target.txt
 ```
 
 ---
@@ -449,14 +434,15 @@ agent-knowgame/
 │       └── token_usage.py   # per-process buffer + cross-process merge
 ├── scripts/
 │   ├── run_game.py                # main entry point for full games
-│   ├── probe_share.py             # p(share) grid probe
-│   ├── probe_request.py           # p(request) mirror of probe_share.py
-│   ├── probe_expected_rounds.py   # expected-rounds grid probe (V1)
-│   ├── probe_together.py          # Together API sanity check
-│   ├── probe_rounds.py            # legacy single-config rounds probe
-│   ├── dump_prompts.py            # render templates to markdown
-│   ├── calc_costs.py              # spend estimator
-│   └── merge_token_usage.py       # merge orphan .part files after crashes
+│   ├── probes/
+│   │   ├── probe_share.py             # p(share) grid probe
+│   │   ├── probe_request.py           # p(request) mirror of probe_share.py
+│   │   ├── probe_expected_rounds.py   # expected-rounds grid probe (V1)
+│   │   └── probe_together.py          # Together API sanity check
+│   └── utils/
+│       ├── dump_prompts.py            # render templates to markdown
+│       ├── calc_costs.py              # spend estimator
+│       └── merge_token_usage.py       # merge orphan .part files after crashes
 ├── configs/
 │   ├── config_template.yaml       # base full-game config
 │   ├── together_prices.yaml       # per-1K price table
