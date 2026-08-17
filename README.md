@@ -26,6 +26,7 @@ A configurable multi-agent game engine, plus one-call probe scripts that let you
    - [`probe_request.py` – will the uninformed agent request the word from the game?](#probe_requestpy--will-the-uninformed-agent-request-the-word-from-the-game)
    - [`probe_expected_rounds.py` – how long does the agent think the game will last?](#probe_expected_roundspy--how-long-does-the-agent-think-the-game-will-last)
    - [`probe_together.py` – Together API sanity check](#probe_togetherpy--together-api-sanity-check)
+   - [`retry_probe_errors.py` – rerun only the error rows from a probe JSONL](#retry_probe_errorspy--rerun-only-the-error-rows-from-a-probe-jsonl)
 6. [Utility scripts](#utility-scripts)
 7. [Cost accounting](#cost-accounting)
 8. [Tests](#tests)
@@ -345,6 +346,48 @@ python scripts/probes/probe_together.py openai/gpt-oss-20b         # any Togethe
 
 > In other words, this is the check that the API is ready for a full game run or for launching any of the other scripts.
 
+### `retry_probe_errors.py` – rerun only the error rows from a probe JSONL
+
+Recovery utility for `probe_share.py`, `probe_request.py` and `probe_expected_rounds.py` outputs. When a probe run finishes with some rows having `error != null` (transport errors, timeouts, grammar-compile failures on Together, etc.), this script reruns only those cells through the same probe's `run_one` and writes a filled copy of the JSONL alongside the original.
+
+The input file is **never modified**, and the output goes to a separate file with a `_retry_<timestamp>` suffix, so the original remains available for any kind of analysis.
+
+Auto-detects which probe produced the input by inspecting the schema of the first row:
+- key `share` – `probe_share`
+- key `request` – `probe_request`
+- key `number` – `probe_expected_rounds`
+
+```bash
+# minimal - retry all errored rows with defaults
+python scripts/probes/retry_probe_errors.py probes/probe_share_qwen_2026-07-31.jsonl
+
+# custom output location and longer timeout
+python scripts/probes/retry_probe_errors.py <input.jsonl> --output probes/manual_retry.jsonl --request-timeout 240
+
+# probe_expected_rounds input from a student_pays run - must pass the mode explicitly
+# (per-row payload does not log payment_mode)
+python scripts/probes/retry_probe_errors.py <input.jsonl> --payment-mode student_pays
+```
+
+**CLI flags:**
+
+| Flag | Default | Notes |
+|---|---|---|
+| `input` (positional) | required | path to the probe JSONL to retry |
+| `--output` | `<input_stem>_retry_<YYYYMMDD-HHMMSS>.jsonl` next to input | destination JSONL |
+| `--reasoning true/false` | auto-detect (`true` if any successful input row has non-null `reasoning`) | force the reasoning-capture flag |
+| `--request-timeout` | `60` | LLM call timeout, seconds |
+| `--payment-mode teacher_pays/student_pays` | `teacher_pays` | **used only for `probe_expected_rounds` input** — the per-row schema does not carry `payment_mode`, so it must be supplied for correct config reconstruction |
+
+**Behaviour:**
+1. Copies all successful rows from input to output as-is.
+2. Reconstructs the `stub_config` for each error row from its logged fields and calls the probe's `run_one`.
+3. Appends each retry result (success or another error) to the output. Retry runs feed the shared token counter via `token_usage_session()`.
+4. Regenerates the CSV from the finished output JSONL.
+5. Prints a summary showing how many rows are still errored (they can be retried again by running the script on the output file).
+
+If the input has no error rows, the script prints a note and exits without creating an output file.
+
 ---
 
 ## Utility scripts
@@ -438,7 +481,8 @@ agent-knowgame/
 │   │   ├── probe_share.py             # p(share) grid probe
 │   │   ├── probe_request.py           # p(request) mirror of probe_share.py
 │   │   ├── probe_expected_rounds.py   # expected-rounds grid probe (V1)
-│   │   └── probe_together.py          # Together API sanity check
+│   │   ├── probe_together.py          # Together API sanity check
+│   │   └── retry_probe_errors.py      # rerun error rows from any grid-probe JSONL
 │   └── utils/
 │       ├── dump_prompts.py            # render templates to markdown
 │       ├── calc_costs.py              # spend estimator
