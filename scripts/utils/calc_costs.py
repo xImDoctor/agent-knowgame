@@ -6,8 +6,8 @@ them by per-1K-token prices loaded from a YAML file.
 Models without a matching price entry are reported as skipped.
 
 Usage:
-    python scripts/calc_costs.py
-    python scripts/calc_costs.py --token-log token_usage.txt --prices configs/together_prices.yaml
+    python scripts/utils/calc_costs.py
+    python scripts/utils/calc_costs.py --token-log token_usage.txt --prices configs/together_prices.yaml
 """
 
 import sys
@@ -15,7 +15,7 @@ import argparse
 import json
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import yaml
 

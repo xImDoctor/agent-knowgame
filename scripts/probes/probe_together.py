@@ -1,7 +1,7 @@
 """Minimal single-call probe against Together API
 
 Usage:
-    python scripts/probe_together.py [model_id]
+    python scripts/probes/probe_together.py [model_id]
 
 Default model: meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo.
 Verifies that TOGETHER_API_KEY works, the model is serverless,
@@ -12,7 +12,7 @@ and pydantic schema is accepted by Together's grammar engine
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from dotenv import load_dotenv
 
